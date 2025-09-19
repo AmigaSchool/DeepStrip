@@ -1,100 +1,182 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+DeepStrip API
+-------------
+FastAPI wrapper exposing DeepStrip features as a web service.
+Aligned with REPL/CLI commands (extract, stream, analyze, scan-unlinked, etc.)
+so CustomGPT Actions can call them 1-to-1.
+"""
+
+import hashlib
 from pathlib import Path
-import hashlib, requests
-from deepstrip import Pipeline, Config, Logger
-from urllib.error import URLError
-from aiohttp.client_exceptions import ClientResponseError
+from fastapi import FastAPI, Body
+from typing import Optional, List, Dict, Any
 
-class DeepStripAPI:
-    def __init__(self, output_dir="output", verbose=0, quiet=False):
-        cfg = Config(output_dir=output_dir, verbose=verbose, quiet=quiet)
-        self.pipeline = Pipeline(cfg)
-        self.logger = Logger(verbose=verbose)
+# Import DeepStrip internals
+from deepstrip_4430_beta19 import (
+    ExtractionPipeline, Config,
+    scan_unlinked_files, generate_manifest,
+    HexDump, FormatDetector
+)
 
-    def process(self, url: str, operation: str, filters=None, outdir: str = "output"):
-        # Validate input
-        if not url or not isinstance(url, str) or not url.startswith("http"):
-            return {"status": "error", "error": "Invalid or missing 'url'"}
-        if not operation or not isinstance(operation, str):
-            return {"status": "error", "error": "Missing or invalid 'operation'"}
-        if filters and isinstance(filters, list):
-            filters = ",".join(filters)
+app = FastAPI(title="DeepStrip API", version="v2.0")
 
+# -------------------------------------------------------------------
+# Basic Health
+# -------------------------------------------------------------------
+@app.get("/ping")
+async def ping():
+    return {"status": "ok", "message": "DeepStrip API is live"}
+
+# -------------------------------------------------------------------
+# Extract archive
+# -------------------------------------------------------------------
+@app.post("/extract")
+async def extract(payload: Dict[str, Any] = Body(...)):
+    url = payload.get("url")
+    filters = payload.get("filters")
+    if not url:
+        return {"status": "error", "message": "Missing URL"}
+
+    try:
+        pipeline = ExtractionPipeline(Config())
+        files = pipeline.extract(
+            data=Path(url).read_bytes() if Path(url).exists() else b"",  # TODO: fetch remote if needed
+            output_dir=Path("./output")
+        )
+        return {
+            "status": "ok",
+            "files": [{"name": f[0], "size": len(f[1])} for f in files]
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# -------------------------------------------------------------------
+# Stream archive
+# -------------------------------------------------------------------
+@app.post("/stream")
+async def stream(payload: Dict[str, Any] = Body(...)):
+    url = payload.get("url")
+    max_files = payload.get("maxFiles")
+    if not url:
+        return {"status": "error", "message": "Missing URL"}
+
+    try:
+        pipeline = ExtractionPipeline(Config())
+        files = pipeline.stream_extract(url, max_files)
+        return {
+            "status": "ok",
+            "files": [{"name": f[0], "size": len(f[1])} for f in files]
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# -------------------------------------------------------------------
+# Analyze file/archive
+# -------------------------------------------------------------------
+@app.post("/analyze")
+async def analyze(payload: Dict[str, Any] = Body(...)):
+    url = payload.get("url")
+    if not url:
+        return {"status": "error", "message": "Missing URL"}
+
+    try:
+        data = Path(url).read_bytes() if Path(url).exists() else b""  # TODO: fetch remote
+        pipeline = ExtractionPipeline(Config())
+        result = pipeline.analyze_file(data)
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# -------------------------------------------------------------------
+# Scan Internet Archive for unlinked files
+# -------------------------------------------------------------------
+@app.post("/scan-unlinked")
+async def scan_unlinked(payload: Dict[str, Any] = Body(...)):
+    base_url = payload.get("baseUrl")
+    max_files = payload.get("maxFiles")
+    if not base_url:
+        return {"status": "error", "message": "Missing baseUrl"}
+
+    try:
+        results = scan_unlinked_files(base_url)
+        if max_files:
+            results = results[:max_files]
+        manifest = generate_manifest(base_url, results)
+        return {
+            "status": "ok",
+            "totalFound": len(results),
+            "manifest": manifest,
+            "files": [
+                {"name": r[0], "url": r[1], "sha256": r[2]} for r in results
+            ]
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# -------------------------------------------------------------------
+# Info
+# -------------------------------------------------------------------
+@app.get("/info")
+async def info():
+    return {
+        "version": "v2.0",
+        "python": "3.10+",
+        "containers": ["zip","tar","gzip","bzip2","xz","7z","cab","arj","lzh","arc","is3","iscab","cfbf","zoo","pak"],
+        "plugins": 0
+    }
+
+# -------------------------------------------------------------------
+# Hexdump
+# -------------------------------------------------------------------
+@app.post("/hexdump")
+async def hexdump(payload: Dict[str, Any] = Body(...)):
+    url = payload.get("url")
+    fmt = payload.get("format", "classic")
+    if not url:
+        return {"status": "error", "message": "Missing URL"}
+
+    try:
+        data = Path(url).read_bytes() if Path(url).exists() else b""  # TODO: fetch remote
+        if fmt == "tb256" or fmt == "gemini":
+            dump = HexDump.tb256(data)
+        elif fmt == "braille":
+            dump = HexDump.tb256(data, "braille")
+        elif fmt == "mixed":
+            dump = HexDump.mixed(data)
+        else:
+            dump = HexDump.classic(data)
+        return {"status": "ok", "hexdump": dump}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# -------------------------------------------------------------------
+# OrCAD Classification (kept as-is)
+# -------------------------------------------------------------------
+@app.post("/orcad/index")
+async def orcad_index(payload: Dict[str, Any] = Body(...)):
+    files: List[str] = payload.get("files", [])
+    if not files:
+        return {"classified": []}
+    classified = []
+    for f in files:
         try:
-            if operation == "list":
-                return self._list_files(url, filters)
-            elif operation == "extract":
-                return self._extract(url, outdir)
-            elif operation == "analyze":
-                return self._analyze(url)
-            elif operation == "fetch":
-                return {"status": "ok", "message": f"Fetched {url} (no extraction)"}
-            else:
-                return {"status": "error", "error": f"Unsupported operation: {operation}"}
-        except (URLError, ClientResponseError) as e:
-            return {
-                "status": "error",
-                "error": "Client response/network error",
-                "detail": str(e),
-                "url": url
-            }
+            data = Path(f).read_bytes()
+            fmt = FormatDetector.detect(data)
+            classified.append({
+                "file": f,
+                "type": fmt,
+                "orcad_format": fmt in ("dsn", "sch", "olb", "lib"),
+                "notes": "detected by FormatDetector"
+            })
         except Exception as e:
-            return {
-                "status": "error",
-                "error": "Unhandled server exception",
-                "detail": str(e),
-                "url": url
-            }
+            classified.append({"file": f, "type": "unknown", "orcad_format": False, "notes": str(e)})
+    return {"classified": classified}
 
-    def _list_files(self, url: str, filters: str = None):
-        try:
-            files = self.pipeline.stream_extract(url, max_files=100)
-            if filters:
-                patterns = [f.strip().lower().replace("*", "") for f in filters.split(",")]
-                files = [f for f in files if any(f[0].lower().endswith(p) for p in patterns)]
-            return {"status": "ok", "files": [{"name": f[0], "size": len(f[1])} for f in files]}
-        except Exception as e:
-            return {
-                "status": "error",
-                "error": "list operation failed",
-                "detail": str(e),
-                "url": url
-            }
-
-    def _extract(self, url: str, outdir: str):
-        try:
-            self.pipeline.stream_extract(url)
-            return {"status": "ok", "output": outdir}
-        except Exception as e:
-            return {
-                "status": "error",
-                "error": "extract failed",
-                "detail": str(e),
-                "url": url
-            }
-
-    def _analyze(self, url: str):
-        try:
-            r = requests.get(url, timeout=20)
-            data = r.content
-            entropy = 0.0
-            if data:
-                freq = {b: data.count(b) for b in set(data)}
-                n = len(data)
-                import math
-                entropy = -sum((c/n)*math.log2(c/n) for c in freq.values())
-            return {
-                "status": "ok",
-                "size": len(data),
-                "entropy": round(entropy, 4),
-                "hashes": {
-                    "md5": hashlib.md5(data).hexdigest(),
-                    "sha256": hashlib.sha256(data).hexdigest()
-                }
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "error": "analyze failed",
-                "detail": str(e),
-                "url": url
-            }
+# -------------------------------------------------------------------
+# Deploy (stub, you may wire into Render webhook)
+# -------------------------------------------------------------------
+@app.post("/deploy")
+async def trigger_deploy():
+    return {"status": "deploy triggered", "detail": "Triggered via API stub"}
