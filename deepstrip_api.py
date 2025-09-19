@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-DeepStrip API
--------------
+deepstrip_api.py
+----------------
 FastAPI wrapper exposing DeepStrip features as a web service.
-Aligned with REPL/CLI commands (extract, stream, analyze, scan-unlinked, etc.)
-so CustomGPT Actions can call them 1-to-1.
+Aligned with REPL/CLI commands so CustomGPT Actions can call them directly.
+
+Endpoints:
+  /ping          - health check
+  /extract       - extract an archive
+  /stream        - stream-extract from remote URL
+  /analyze       - analyze file/archive
+  /scan-unlinked - scan Internet Archive for unlinked files
+  /info          - system info
+  /hexdump       - generate hexdump
+  /orcad/index   - classify OrCAD files
+  /deploy        - trigger redeploy (stub or webhook)
 """
 
-import hashlib
 from pathlib import Path
 from fastapi import FastAPI, Body
-from typing import Optional, List, Dict, Any
+from typing import Dict, Any, List
 
 # Import DeepStrip internals
 from deepstrip_4430_beta19 import (
@@ -20,17 +29,21 @@ from deepstrip_4430_beta19 import (
     HexDump, FormatDetector
 )
 
-app = FastAPI(title="DeepStrip API", version="v2.0")
+app = FastAPI(
+    title="DeepStrip API",
+    version="v2.0",
+    description="Universal archive extractor and OrCAD analyzer. Hosted on Render."
+)
 
 # -------------------------------------------------------------------
-# Basic Health
+# Health check
 # -------------------------------------------------------------------
 @app.get("/ping")
 async def ping():
     return {"status": "ok", "message": "DeepStrip API is live"}
 
 # -------------------------------------------------------------------
-# Extract archive
+# Extract archive (local or remote placeholder)
 # -------------------------------------------------------------------
 @app.post("/extract")
 async def extract(payload: Dict[str, Any] = Body(...)):
@@ -40,11 +53,10 @@ async def extract(payload: Dict[str, Any] = Body(...)):
         return {"status": "error", "message": "Missing URL"}
 
     try:
+        # TODO: fetch from remote if needed. For now, assume local path.
+        data = Path(url).read_bytes() if Path(url).exists() else b""
         pipeline = ExtractionPipeline(Config())
-        files = pipeline.extract(
-            data=Path(url).read_bytes() if Path(url).exists() else b"",  # TODO: fetch remote if needed
-            output_dir=Path("./output")
-        )
+        files = pipeline.extract(data, Path("./output"))
         return {
             "status": "ok",
             "files": [{"name": f[0], "size": len(f[1])} for f in files]
@@ -53,7 +65,7 @@ async def extract(payload: Dict[str, Any] = Body(...)):
         return {"status": "error", "message": str(e)}
 
 # -------------------------------------------------------------------
-# Stream archive
+# Stream-extract from remote URL
 # -------------------------------------------------------------------
 @app.post("/stream")
 async def stream(payload: Dict[str, Any] = Body(...)):
@@ -73,7 +85,7 @@ async def stream(payload: Dict[str, Any] = Body(...)):
         return {"status": "error", "message": str(e)}
 
 # -------------------------------------------------------------------
-# Analyze file/archive
+# Analyze a file or archive
 # -------------------------------------------------------------------
 @app.post("/analyze")
 async def analyze(payload: Dict[str, Any] = Body(...)):
@@ -82,7 +94,7 @@ async def analyze(payload: Dict[str, Any] = Body(...)):
         return {"status": "error", "message": "Missing URL"}
 
     try:
-        data = Path(url).read_bytes() if Path(url).exists() else b""  # TODO: fetch remote
+        data = Path(url).read_bytes() if Path(url).exists() else b""
         pipeline = ExtractionPipeline(Config())
         result = pipeline.analyze_file(data)
         return {"status": "ok", **result}
@@ -123,7 +135,10 @@ async def info():
     return {
         "version": "v2.0",
         "python": "3.10+",
-        "containers": ["zip","tar","gzip","bzip2","xz","7z","cab","arj","lzh","arc","is3","iscab","cfbf","zoo","pak"],
+        "containers": [
+            "zip","tar","gzip","bzip2","xz","7z","cab","arj",
+            "lzh","arc","is3","iscab","cfbf","zoo","pak"
+        ],
         "plugins": 0
     }
 
@@ -138,8 +153,8 @@ async def hexdump(payload: Dict[str, Any] = Body(...)):
         return {"status": "error", "message": "Missing URL"}
 
     try:
-        data = Path(url).read_bytes() if Path(url).exists() else b""  # TODO: fetch remote
-        if fmt == "tb256" or fmt == "gemini":
+        data = Path(url).read_bytes() if Path(url).exists() else b""
+        if fmt in ("tb256", "gemini"):
             dump = HexDump.tb256(data)
         elif fmt == "braille":
             dump = HexDump.tb256(data, "braille")
@@ -152,7 +167,7 @@ async def hexdump(payload: Dict[str, Any] = Body(...)):
         return {"status": "error", "message": str(e)}
 
 # -------------------------------------------------------------------
-# OrCAD Classification (kept as-is)
+# OrCAD Classification
 # -------------------------------------------------------------------
 @app.post("/orcad/index")
 async def orcad_index(payload: Dict[str, Any] = Body(...)):
@@ -175,7 +190,7 @@ async def orcad_index(payload: Dict[str, Any] = Body(...)):
     return {"classified": classified}
 
 # -------------------------------------------------------------------
-# Deploy (stub, you may wire into Render webhook)
+# Deploy (stub or webhook integration)
 # -------------------------------------------------------------------
 @app.post("/deploy")
 async def trigger_deploy():
