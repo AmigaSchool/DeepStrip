@@ -1,18 +1,12 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-requests==2.32.3
-pyyaml==6.0.2
-py7zr==0.21.0
+# Core API
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+gunicorn==21.2.0
+requests==2.31.0
 
-# Optional, used in DeepStrip for memory stats & streaming
-psutil==5.9.8
+# Optional: parsing & compression support
+python-multipart==0.0.9   # if you ever accept file uploads
+pyyaml==6.0.1             # for YAML manifest handling
 
-# Dependencies pulled by py7zr
-texttable==1.7.0
-pycryptodomex==3.20.0
-brotli==1.1.0
-pyzstd==0.16.1
-pyppmd==1.1.0
-pybcj==1.0.2
-multivolumefile==0.2.3
-inflate64==1.0.0
+# DeepStrip internals
+# (if you have your own deepstrip_4430_beta19.py in repo, you don’t need a pip package)
