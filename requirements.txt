@@ -1,5 +1,5 @@
-fastapi
-uvicorn
-requests
-pyyaml
-py7zr
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+requests>=2.31.0
+pyyaml>=6.0.1
+py7zr>=0.20.6
