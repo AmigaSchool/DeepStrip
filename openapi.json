@@ -1,0 +1,363 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DeepStrip API",
+    "version": "v2.0",
+    "description": "Universal archive extractor and OrCAD analyzer. Hosted on Render and deployed from GitHub."
+  },
+  "servers": [
+    {
+      "url": "https://deepstrip.onrender.com",
+      "description": "Render-hosted DeepStrip backend"
+    }
+  ],
+  "paths": {
+    "/ping": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "ping",
+        "responses": {
+          "200": {
+            "description": "API is online",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/extract": {
+      "post": {
+        "summary": "Extract an archive",
+        "operationId": "extract",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": { "type": "string", "format": "uri" },
+                  "filters": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Extracted files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "size": { "type": "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stream": {
+      "post": {
+        "summary": "Stream-extract from remote URL",
+        "operationId": "stream",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": { "type": "string", "format": "uri" },
+                  "maxFiles": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Streamed files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "size": { "type": "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analyze": {
+      "post": {
+        "summary": "Analyze a file or archive",
+        "operationId": "analyze",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": { "type": "string", "format": "uri" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Analysis results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "format": { "type": "string" },
+                    "confidence": { "type": "number" },
+                    "entropy": { "type": "number" },
+                    "hashes": {
+                      "type": "object",
+                      "properties": {
+                        "md5": { "type": "string" },
+                        "sha256": { "type": "string" }
+                      }
+                    },
+                    "packer": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scan-unlinked": {
+      "post": {
+        "summary": "Scan Internet Archive for unlinked files",
+        "operationId": "scanUnlinked",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["baseUrl"],
+                "properties": {
+                  "baseUrl": { "type": "string" },
+                  "maxFiles": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scan results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "totalFound": { "type": "integer" },
+                    "manifest": { "type": "string" },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "url": { "type": "string" },
+                          "sha256": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/info": {
+      "get": {
+        "summary": "System info",
+        "operationId": "info",
+        "responses": {
+          "200": {
+            "description": "Info about service",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": { "type": "string" },
+                    "python": { "type": "string" },
+                    "containers": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "plugins": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hexdump": {
+      "post": {
+        "summary": "Generate hexdump of a file",
+        "operationId": "hexdump",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": { "type": "string", "format": "uri" },
+                  "format": {
+                    "type": "string",
+                    "enum": ["classic", "tb256", "gemini", "braille", "mixed"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hexdump string",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "hexdump": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orcad/index": {
+      "post": {
+        "summary": "Classify OrCAD files",
+        "operationId": "orcadIndex",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["files"],
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Classification results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "classified": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "file": { "type": "string" },
+                          "type": { "type": "string" },
+                          "orcad_format": { "type": "boolean" },
+                          "notes": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/deploy": {
+      "post": {
+        "summary": "Trigger redeploy",
+        "operationId": "triggerDeploy",
+        "responses": {
+          "200": {
+            "description": "Deploy triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "detail": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
