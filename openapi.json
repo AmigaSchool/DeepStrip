@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "DeepStrip API",
-    "version": "v2.0",
+    "version": "v2.1",
     "description": "Universal archive extractor and OrCAD analyzer. Hosted on Render and deployed from GitHub."
   },
   "servers": [
@@ -250,7 +250,7 @@
     },
     "/hexdump": {
       "post": {
-        "summary": "Generate hexdump of a file",
+        "summary": "Return file content in chosen encoding",
         "operationId": "hexdump",
         "requestBody": {
           "required": true,
@@ -261,10 +261,11 @@
                 "required": ["url"],
                 "properties": {
                   "url": { "type": "string", "format": "uri" },
-                  "format": {
+                  "mode": {
                     "type": "string",
-                    "enum": ["classic", "tb256", "gemini", "braille", "mixed"]
-                  }
+                    "enum": ["binary", "hex", "base64", "tb256", "braille"]
+                  },
+                  "spaced": { "type": "boolean" }
                 }
               }
             }
@@ -272,14 +273,101 @@
         },
         "responses": {
           "200": {
-            "description": "Hexdump string",
+            "description": "Encoded file content",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "status": { "type": "string" },
-                    "hexdump": { "type": "string" }
+                    "mode": { "type": "string" },
+                    "content": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/save": {
+      "post": {
+        "summary": "Save file to disk (decode from encoding)",
+        "operationId": "save",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["filename", "content"],
+                "properties": {
+                  "filename": { "type": "string" },
+                  "content": { "type": "string" },
+                  "mode": {
+                    "type": "string",
+                    "enum": ["binary", "hex", "base64", "tb256", "braille"]
+                  },
+                  "spaced": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Save result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "saved": { "type": "string" },
+                    "size": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/load": {
+      "post": {
+        "summary": "Load file from disk and return in chosen encoding",
+        "operationId": "load",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["filename"],
+                "properties": {
+                  "filename": { "type": "string" },
+                  "mode": {
+                    "type": "string",
+                    "enum": ["binary", "hex", "base64", "tb256", "braille"]
+                  },
+                  "spaced": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Loaded file content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "filename": { "type": "string" },
+                    "mode": { "type": "string" },
+                    "content": { "type": "string" }
                   }
                 }
               }
