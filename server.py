@@ -12,7 +12,7 @@ app = FastAPI(
 )
 
 # -------------------------------------------------------------------
-# Health check for Render deployment
+# Health check (Render will call this at /healthz)
 # -------------------------------------------------------------------
 @app.get("/healthz")
 def health():
