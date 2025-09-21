@@ -1,10 +1,11 @@
 services:
   - type: web
-    name: deepstrip-api
+    name: DeepStrip
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 4 -k uvicorn.workers.UvicornWorker server:app
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn server:app --host 0.0.0.0 --port $PORT"
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.10
+      - key: PORT
+        value: 10000
+    healthCheckPath: /healthz
